@@ -1,0 +1,21 @@
+{
+  "name": "release-guard",
+  "version": "0.1.0",
+  "description": "Evidence-grounded GitHub pull-request risk and release-readiness agent",
+  "type": "module",
+  "main": "agent.ts",
+  "scripts": {
+    "start": "npx adk run agent.ts",
+    "web": "npx adk web agent.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "@google/adk": "^2.0.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@google/adk-devtools": "^2.0.0",
+    "typescript": "^7.0.2"
+  }
+}
