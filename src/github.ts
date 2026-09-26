@@ -81,7 +81,7 @@ async function githubFetch(url: string, init: RequestInit = {}): Promise<Respons
   }
   if (response.status === 404) {
     throw new Error(
-      "GitHub resource not found. Check the pull request URL and token permissions.",
+      "GitHub resource not found. If the repository is private, grant this GITHUB_TOKEN access to it. Also confirm a pull request exists — pushing a branch does not create PR #1.",
     );
   }
 
