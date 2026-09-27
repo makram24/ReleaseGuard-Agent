@@ -95,6 +95,25 @@ async function githubJson<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** Soft-fetch for optional endpoints (e.g. Checks API when the token lacks Checks: Read). */
+async function githubJsonOptional<T>(
+  path: string,
+  options: { allowStatuses?: number[] } = {},
+): Promise<T | null> {
+  const allow = new Set(options.allowStatuses ?? [403, 404]);
+  const url = path.startsWith("http") ? path : `${GITHUB_API}${path}`;
+  const response = await fetch(url, { headers: githubHeaders() });
+  if (response.ok) return (await response.json()) as T;
+  if (allow.has(response.status)) return null;
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      "GitHub authentication failed. Set GITHUB_TOKEN in the environment with access to this repository.",
+    );
+  }
+  const body = await response.text();
+  throw new Error(`GitHub request failed (${response.status}): ${body.slice(0, 300)}`);
+}
+
 async function githubPaginateArray<T>(path: string): Promise<T[]> {
   const items: T[] = [];
   let next: string | null = path.startsWith("http") ? path : `${GITHUB_API}${path}`;
@@ -266,15 +285,17 @@ export async function readCiStatus(prUrl: string): Promise<CiStatus> {
     return { head_sha: "", overall: "none", checks: [] };
   }
 
-  const checkPayload = await githubJson<{ check_runs?: GithubCheckRun[] }>(
+  // Check Runs often need fine-grained "Checks: Read". Fall back to commit statuses when denied.
+  const checkPayload = await githubJsonOptional<{ check_runs?: GithubCheckRun[] }>(
     `/repos/${pr.owner}/${pr.repo}/commits/${pr.head_sha}/check-runs?per_page=100`,
   );
-  const statusPayload = await githubJson<{ statuses?: GithubStatus[] }>(
-    `/repos/${pr.owner}/${pr.repo}/commits/${pr.head_sha}/status`,
-  );
+  const statusPayload =
+    (await githubJsonOptional<{ statuses?: GithubStatus[] }>(
+      `/repos/${pr.owner}/${pr.repo}/commits/${pr.head_sha}/status`,
+    )) ?? { statuses: [] };
 
   const checks: CiCheck[] = [
-    ...(checkPayload.check_runs ?? []).map((run) => ({
+    ...(checkPayload?.check_runs ?? []).map((run) => ({
       name: run.name ?? "check",
       source: "check_run" as const,
       status: run.status ?? "unknown",

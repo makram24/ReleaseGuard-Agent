@@ -32,3 +32,27 @@ test("classifyChangedFiles tags auth, payments, migrations, dependencies, config
     0,
   );
 });
+
+test("classifyChangedFiles ignores keyword hits in tests and rule sources", () => {
+  const report = classifyChangedFiles([
+    changedFile({
+      path: "tests/policy.test.ts",
+      added_lines: ["DROP TABLE sessions;", "stripe.charges.create()"],
+    }),
+    changedFile({
+      path: "src/classify.ts",
+      added_lines: ["if (/stripe|paypal|payment/i.test(path)) {}", "password_hash"],
+    }),
+    changedFile({
+      path: "db/migrations/20240102_real.sql",
+      added_lines: ["DROP TABLE accounts;"],
+    }),
+  ]);
+
+  assert.equal(report.files.find((file) => file.path === "tests/policy.test.ts")?.categories.length, 0);
+  assert.equal(report.files.find((file) => file.path === "src/classify.ts")?.categories.length, 0);
+  assert.ok(report.categories_present.includes("database_migrations"));
+  assert.equal(report.destructive_schema_change, true);
+  assert.ok(report.high_risk_files.includes("db/migrations/20240102_real.sql"));
+  assert.ok(!report.high_risk_files.includes("tests/policy.test.ts"));
+});

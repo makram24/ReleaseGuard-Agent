@@ -101,6 +101,17 @@ const RULES: Rule[] = [
 const DESTRUCTIVE =
   /\bDROP\s+(TABLE|COLUMN|DATABASE|SCHEMA)\b|\bTRUNCATE\s+TABLE\b|\bALTER\s+TABLE\b[\s\S]{0,80}\bDROP\b/i;
 
+const CONTENT_DRIVEN: RiskCategory[] = ["authentication", "payments", "database_migrations"];
+
+/** Test fixtures and rule-definition sources often mention risky keywords without shipping them. */
+function isFixtureOrRuleSource(path: string): boolean {
+  return (
+    /(^|\/)tests?\//i.test(path) ||
+    /\.(test|spec)\.[cm]?[jt]sx?$/i.test(path) ||
+    /(^|\/)(classify|secrets)\.[cm]?[jt]sx?$/i.test(path)
+  );
+}
+
 const HIGH_RISK: RiskCategory[] = [
   "authentication",
   "payments",
@@ -114,8 +125,18 @@ export function classifyChangedFiles(files: ChangedFile[]): FileRiskReport {
     const content = [file.patch ?? "", ...file.added_lines].join("\n");
     const categories: RiskCategory[] = [];
     const reasons: string[] = [];
+    const skipContent = isFixtureOrRuleSource(file.path);
 
     for (const rule of RULES) {
+      if (skipContent && CONTENT_DRIVEN.includes(rule.category)) {
+        // Still honor path-based signals (e.g. db/migrations/*.sql), but ignore keyword hits in fixtures.
+        const pathOnly = rule.test(file.path, "");
+        if (pathOnly) {
+          categories.push(rule.category);
+          reasons.push(pathOnly);
+        }
+        continue;
+      }
       const reason = rule.test(file.path, content);
       if (reason) {
         categories.push(rule.category);
@@ -132,7 +153,10 @@ export function classifyChangedFiles(files: ChangedFile[]): FileRiskReport {
 
   const categoriesPresent = [...new Set(classified.flatMap((file) => file.categories))];
 
-  const destructive = files.some((file) => DESTRUCTIVE.test([file.patch ?? "", ...file.added_lines].join("\n")));
+  const destructive = files.some((file) => {
+    if (isFixtureOrRuleSource(file.path)) return false;
+    return DESTRUCTIVE.test([file.patch ?? "", ...file.added_lines].join("\n"));
+  });
 
   return {
     files: classified,
