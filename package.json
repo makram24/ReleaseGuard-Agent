@@ -1,14 +1,39 @@
 {
   "name": "release-guard",
   "version": "0.1.0",
+  "private": false,
   "description": "Evidence-grounded GitHub pull-request risk and release-readiness agent",
+  "license": "MIT",
+  "author": "Makram Al Moghrabi",
   "type": "module",
   "main": "agent.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/makram24/ReleaseGuard-Agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/makram24/ReleaseGuard-Agent/issues"
+  },
+  "homepage": "https://github.com/makram24/ReleaseGuard-Agent#readme",
+  "keywords": [
+    "ai-agent",
+    "github",
+    "pull-request",
+    "release-readiness",
+    "code-review",
+    "google-adk",
+    "gemini"
+  ],
   "scripts": {
     "start": "npx adk run agent.ts",
     "web": "npx adk web agent.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/github.test.ts tests/secrets.test.ts tests/classify.test.ts tests/evidence.test.ts tests/policy.test.ts tests/report.test.ts"
+    "test": "tsx --test tests/github.test.ts tests/secrets.test.ts tests/classify.test.ts tests/evidence.test.ts tests/policy.test.ts tests/report.test.ts tests/runtime.test.ts",
+    "smoke": "tsx scripts/smoke.mjs",
+    "ci": "npm run typecheck && npm test"
   },
   "dependencies": {
     "@google/adk": "^2.0.0",

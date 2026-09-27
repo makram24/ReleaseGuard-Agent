@@ -65,7 +65,7 @@ export type ChangedFile = {
 
 export type CiCheck = {
   name: string;
-  source: "check_run" | "status";
+  source: "check_run" | "status" | "workflow_run";
   status: string;
   conclusion: string | null;
   details_url?: string;

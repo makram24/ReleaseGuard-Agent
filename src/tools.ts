@@ -2,6 +2,7 @@ import { FunctionTool } from "@google/adk";
 import { z } from "zod";
 import { classifyChangedFiles } from "./classify.ts";
 import { validateFindings, normalizeFinding } from "./evidence.ts";
+import { loadEnv } from "./env.ts";
 import {
   listRepositoryPullRequests,
   publishPrComment,
@@ -24,6 +25,8 @@ import type {
   EvidenceValidationReport,
 } from "./types.ts";
 import { asArray, parseJsonArg, toolError, toolOk } from "./util.ts";
+
+loadEnv();
 
 const prUrlParam = z.object({
   pr_url: z

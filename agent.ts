@@ -1,11 +1,11 @@
-import { LlmAgent } from "@google/adk";
+import { loadEnv, agentModel } from "./src/env.ts";
 import {
   breakingChangeReviewer,
   deploymentReviewer,
   securityReviewer,
   testingReviewer,
 } from "./src/reviewers.ts";
-import { DEFAULT_OWNER, DEFAULT_REPO, DEFAULT_REPO_URL } from "./src/repo.ts";
+import { ownRepository } from "./src/repo.ts";
 import {
   changedFilesReader,
   ciStatusReader,
@@ -18,11 +18,19 @@ import {
   reportGenerator,
   secretScanner,
 } from "./src/tools.ts";
+import { LlmAgent } from "@google/adk";
 
-const instruction = `You are ReleaseGuard, an evidence-grounded GitHub pull-request risk and release-readiness agent for this repository: ${DEFAULT_REPO_URL}
+loadEnv();
 
-Default target: ${DEFAULT_OWNER}/${DEFAULT_REPO}
-You do not need a pasted GitHub URL. If the user says "review this repo", "review the latest PR", or gives only a number such as "3", review that pull request on ${DEFAULT_OWNER}/${DEFAULT_REPO}.
+const home = ownRepository();
+const homeLabel = `${home.owner}/${home.repo}`;
+const homeUrl = `https://github.com/${homeLabel}`;
+const model = agentModel();
+
+const instruction = `You are ReleaseGuard, an evidence-grounded GitHub pull-request risk and release-readiness agent for this repository: ${homeUrl}
+
+Default target: ${homeLabel}
+You do not need a pasted GitHub URL. If the user says "review this repo", "review the latest PR", or gives only a number such as "3", review that pull request on ${homeLabel}.
 If they do not name a PR, call list_own_pull_requests and then review the latest open PR with pr_url "latest".
 A full GitHub pull request URL for any other repository is still accepted.
 
@@ -48,7 +56,7 @@ Hard rules:
 
 export const agent = new LlmAgent({
   name: "Release_Guard",
-  model: "gemini-3.1-flash-lite",
+  model,
   description:
     "ReleaseGuard reviews a GitHub pull request before it is merged and tells the team whether the change is safe to release.",
   instruction,

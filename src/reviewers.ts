@@ -1,7 +1,10 @@
 import { AgentTool, LlmAgent } from "@google/adk";
 import { z } from "zod";
+import { agentModel, loadEnv } from "./env.ts";
 
-const MODEL = "gemini-3.1-flash-lite";
+loadEnv();
+
+const MODEL = agentModel();
 
 const reviewerInput = z.object({
   pr_json: z.string().describe("JSON from pull_request_reader."),

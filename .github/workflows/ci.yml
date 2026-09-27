@@ -15,5 +15,8 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
+      - run: npm run ci
+      - name: GitHub smoke (token auto-injected)
+        run: npm run smoke
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -8,6 +8,7 @@ import type {
 } from "./types.ts";
 import { parsePatchLines } from "./patch.ts";
 import { isLatestAlias, ownPullRequestUrl, ownRepository, type HomeRepository } from "./repo.ts";
+import { githubToken, withRetries } from "./runtime.ts";
 import { redactSecretsInText } from "./secrets.ts";
 
 const GITHUB_API = "https://api.github.com";
@@ -52,7 +53,7 @@ function githubHeaders(extra: Record<string, string> = {}): Record<string, strin
     "User-Agent": "ReleaseGuard",
     ...extra,
   };
-  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+  const token = githubToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
@@ -67,26 +68,31 @@ function parseNextLink(linkHeader: string | null): string | null {
 }
 
 async function githubFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  const response = await fetch(url, {
-    ...init,
-    headers: githubHeaders(init.headers as Record<string, string> | undefined),
+  return withRetries(`GitHub ${init.method ?? "GET"} ${url}`, async () => {
+    const response = await fetch(url, {
+      ...init,
+      headers: githubHeaders(init.headers as Record<string, string> | undefined),
+    });
+
+    if (response.ok) return response;
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(
+        "GitHub authentication failed. Set GITHUB_TOKEN with access to this repository (Contents: Read, Pull requests: Read/Write, Checks: Read).",
+      );
+    }
+    if (response.status === 404) {
+      throw new Error(
+        "GitHub resource not found. If the repository is private, grant this GITHUB_TOKEN access to it. Also confirm a pull request exists — pushing a branch does not create PR #1.",
+      );
+    }
+    if (response.status === 429 || response.status >= 500) {
+      throw new Error(`GitHub temporary failure (${response.status}).`);
+    }
+
+    const body = await response.text();
+    throw new Error(`GitHub request failed (${response.status}): ${body.slice(0, 300)}`);
   });
-
-  if (response.ok) return response;
-
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(
-      "GitHub authentication failed. Set GITHUB_TOKEN in the environment with access to this repository.",
-    );
-  }
-  if (response.status === 404) {
-    throw new Error(
-      "GitHub resource not found. If the repository is private, grant this GITHUB_TOKEN access to it. Also confirm a pull request exists — pushing a branch does not create PR #1.",
-    );
-  }
-
-  const body = await response.text();
-  throw new Error(`GitHub request failed (${response.status}): ${body.slice(0, 300)}`);
 }
 
 async function githubJson<T>(path: string): Promise<T> {
@@ -102,16 +108,21 @@ async function githubJsonOptional<T>(
 ): Promise<T | null> {
   const allow = new Set(options.allowStatuses ?? [403, 404]);
   const url = path.startsWith("http") ? path : `${GITHUB_API}${path}`;
-  const response = await fetch(url, { headers: githubHeaders() });
-  if (response.ok) return (await response.json()) as T;
-  if (allow.has(response.status)) return null;
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(
-      "GitHub authentication failed. Set GITHUB_TOKEN in the environment with access to this repository.",
-    );
-  }
-  const body = await response.text();
-  throw new Error(`GitHub request failed (${response.status}): ${body.slice(0, 300)}`);
+  return withRetries(`GitHub optional GET ${url}`, async () => {
+    const response = await fetch(url, { headers: githubHeaders() });
+    if (response.ok) return (await response.json()) as T;
+    if (allow.has(response.status)) return null;
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(
+        "GitHub authentication failed. Set GITHUB_TOKEN with access to this repository (Contents: Read, Pull requests: Read/Write, Checks: Read).",
+      );
+    }
+    if (response.status === 429 || response.status >= 500) {
+      throw new Error(`GitHub temporary failure (${response.status}).`);
+    }
+    const body = await response.text();
+    throw new Error(`GitHub request failed (${response.status}): ${body.slice(0, 300)}`);
+  });
 }
 
 async function githubPaginateArray<T>(path: string): Promise<T[]> {
@@ -172,6 +183,14 @@ type GithubStatus = {
   context?: string;
   state?: string;
   target_url?: string;
+};
+
+type GithubWorkflowRun = {
+  name?: string;
+  status?: string;
+  conclusion?: string | null;
+  html_url?: string;
+  head_sha?: string;
 };
 
 export async function readPullRequest(prUrl: string): Promise<PullRequestSummary> {
@@ -310,6 +329,22 @@ export async function readCiStatus(prUrl: string): Promise<CiStatus> {
       details_url: status.target_url,
     })),
   ];
+
+  // Fine-grained tokens without Checks: Read still see workflow runs via the Actions API.
+  if (checks.length === 0) {
+    const workflows = await githubJsonOptional<{ workflow_runs?: GithubWorkflowRun[] }>(
+      `/repos/${pr.owner}/${pr.repo}/actions/runs?head_sha=${pr.head_sha}&per_page=20`,
+    );
+    for (const run of workflows?.workflow_runs ?? []) {
+      checks.push({
+        name: run.name ?? "workflow",
+        source: "workflow_run",
+        status: run.status ?? "unknown",
+        conclusion: run.conclusion ?? null,
+        details_url: run.html_url,
+      });
+    }
+  }
 
   return {
     head_sha: pr.head_sha,
