@@ -148,3 +148,13 @@ vite.config.ts.timestamp-*
 ai-agent.key
 ai-agent.pptx
 original-deck-images/
+
+# Local ADK / diagnostic artifacts
+.adk/
+*.session.json
+scripts/probe-*.mjs
+scripts/check-*.mjs
+scripts/live-*.mjs
+
+# Local demo recordings / frames (keep out of the public repo)
+docs/demo/
