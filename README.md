@@ -100,17 +100,6 @@ PR URL / number
 - PR comments never post without confirmation
 - `.env` is gitignored
 
-## Public launch checklist
-
-Before making the repository public:
-
-1. Confirm `.env` is not tracked (`git status` / `git check-ignore -v .env`)
-2. Rotate any tokens that were ever pasted into chat, screenshots, or logs
-3. Make sure `README`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` are on `main`
-4. Ensure GitHub Actions CI is green on `main`
-5. Prefer a fine-grained PAT with least privilege for demos
-6. Decide whether demo defaults (`RELEASE_GUARD_REPO`) stay pointed at this repo
-
 ## Operations
 
 **Inject secrets** from a secret manager or local `.env` (never commit them).
